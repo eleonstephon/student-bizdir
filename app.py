@@ -1,0 +1,383 @@
+"""
+app.py — Student BizDir
+Backend Lead (Member 2) owns this file.
+
+This is the ENTRY POINT of the entire web application.
+When a user visits a URL, Flask looks here for a matching route and runs that function.
+
+HOW FLASK WORKS (quick mental model):
+  1. User types http://localhost:5000/ in their browser
+  2. Flask sees the URL "/" and finds the matching @app.route("/")
+  3. Flask runs that Python function
+  4. The function returns HTML (via render_template) or a redirect
+  5. Flask sends that HTML back to the browser
+
+JINJA2 TEMPLATES:
+  render_template("index.html", businesses=businesses)
+  This sends the businesses list to the HTML file.
+  In the HTML, Member 1 can then use: {% for b in businesses %}
+"""
+
+import os
+from flask import Flask, render_template, request, redirect, url_for, flash
+from werkzeug.utils import secure_filename  # Sanitizes filenames — security tool ⭐
+
+# Import all our database functions from the file you wrote
+import database
+
+# ─────────────────────────────────────────────────────────
+# APP SETUP
+# ─────────────────────────────────────────────────────────
+
+app = Flask(__name__)
+
+# Secret key is required for flash messages (success/error alerts)
+# In a real app, this would be a long random string stored in an environment variable
+app.secret_key = "bizdirapp-hackathon-secret-2026"
+
+# ─────────────────────────────────────────────────────────
+# FILE UPLOAD CONFIGURATION
+# ─────────────────────────────────────────────────────────
+
+# Where uploaded photos are saved on the server
+UPLOAD_FOLDER = os.path.join("static", "uploads")
+
+# Only these file types are accepted for photo uploads ⭐ Security feature
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# Make sure the upload folder exists (create it if it doesn't)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+# ─────────────────────────────────────────────────────────
+# HELPER: File type validation
+# ─────────────────────────────────────────────────────────
+
+def allowed_file(filename):
+    """
+    Returns True if the file has an allowed image extension, False otherwise.
+
+    HOW IT WORKS:
+      "photo.jpg"  →  extension is "jpg"  →  "jpg" in ALLOWED_EXTENSIONS  →  True
+      "virus.exe"  →  extension is "exe"  →  "exe" in ALLOWED_EXTENSIONS  →  False
+      "noextension"→  no dot found        →  False
+
+    ⭐ SECURITY: We only accept image files to prevent malicious uploads.
+       Show judges this when explaining file upload security!
+    """
+    return (
+        "." in filename and
+        filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# DATABASE SETUP — runs once before the first request
+# ─────────────────────────────────────────────────────────
+
+# This creates the database and table if they don't exist yet
+# Runs every time the app starts, but CREATE TABLE IF NOT EXISTS makes it safe
+with app.app_context():
+    database.init_db()
+
+
+# ─────────────────────────────────────────────────────────
+# ROUTE 1: GET /  (Homepage)
+# ─────────────────────────────────────────────────────────
+
+@app.route("/")
+def homepage():
+    """
+    The main landing page showing all verified business listings.
+
+    SUPPORTS TWO FEATURES:
+    1. Category filter: /?category=Food  — shows only Food businesses
+    2. Search: /?search=braids           — shows businesses matching "braids"
+
+    HOW request.args WORKS:
+      When a user visits /?category=Food
+      request.args is like a dictionary: {"category": "Food"}
+      request.args.get("category") returns "Food"
+      request.args.get("category") returns None if the key isn't in the URL
+
+    FLOW:
+      1. Check if there's a search query in the URL
+      2. Check if there's a category filter in the URL
+      3. Otherwise, fetch all verified businesses
+      4. Pass the businesses list to the HTML template
+    """
+    search_query = request.args.get("search", "").strip()
+    category_filter = request.args.get("category", "").strip()
+
+    if search_query:
+        # User typed something in the search bar
+        # First try AI search (if it's set up), fall back to SQL LIKE search
+        try:
+            # ai_search is written by another team member — we wrap in try/except
+            # so if it fails, we gracefully fall back to basic search
+            from ai_search import ai_search
+            businesses = ai_search(search_query)
+        except Exception:
+            # AI search failed or not set up yet — use basic SQL LIKE search
+            businesses = database.search_businesses(search_query)
+
+    elif category_filter:
+        # User clicked a category button (e.g. "Food", "Fashion", "Tech")
+        businesses = database.get_all_businesses(category=category_filter)
+
+    else:
+        # No search, no filter — show everything verified
+        businesses = database.get_all_businesses()
+
+    # render_template sends this data to templates/index.html
+    # Member 1 uses {{ businesses }} in their HTML to display the listings
+    return render_template(
+        "index.html",
+        businesses=businesses,
+        search_query=search_query,
+        category_filter=category_filter
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# ROUTE 2: GET /business/<id>  (Business Profile Page)
+# ─────────────────────────────────────────────────────────
+
+@app.route("/business/<int:business_id>")
+def business_profile(business_id):
+    """
+    Shows the full profile page for a single business.
+
+    <int:business_id> in the URL:
+      Flask automatically extracts the number from the URL.
+      /business/5  →  business_id = 5  (as an integer, not a string)
+      The <int:> part means Flask rejects non-number values automatically.
+
+    WHAT HAPPENS IF ID DOESN'T EXIST?
+      database.get_business_by_id() returns None.
+      We return a 404 error page so the user knows the business wasn't found.
+      This prevents crashes and gives the user useful feedback.
+    """
+    business = database.get_business_by_id(business_id)
+
+    # Handle the case where no business has this ID
+    if business is None:
+        return render_template("404.html"), 404  # 404 = "Not Found" HTTP status
+
+    return render_template("business.html", business=business)
+
+
+# ─────────────────────────────────────────────────────────
+# ROUTE 3: GET /register  (Show Registration Form)
+# ─────────────────────────────────────────────────────────
+
+@app.route("/register")
+def register_page():
+    """
+    Just shows the registration form HTML.
+
+    This is a simple route — it doesn't fetch any data.
+    It just renders the HTML form that Member 1 designed.
+
+    The form's action="/register" and method="POST" means:
+      When submitted, the browser sends data to POST /register (Route 4 below).
+    """
+    return render_template("register.html")
+
+
+# ─────────────────────────────────────────────────────────
+# ROUTE 4: POST /register  (Handle Form Submission)
+# ─────────────────────────────────────────────────────────
+
+@app.route("/register", methods=["POST"])
+def register_submit():
+    """
+    Receives and processes the registration form data.
+
+    This is the most important and complex route — it does 4 things:
+      1. COLLECT   — Read all form fields from the submitted form
+      2. VALIDATE  — Check that required fields are filled, etc. ⭐ Security
+      3. UPLOAD    — Save the photo file securely ⭐ Security
+      4. SAVE      — Insert the new business into the database
+
+    HOW request.form WORKS:
+      When a user submits an HTML form, the browser sends all the field values.
+      request.form is like a dictionary of those values.
+      request.form.get("business_name") returns what the user typed in that field.
+
+    HOW request.files WORKS:
+      File uploads come through request.files, not request.form.
+      request.files.get("photo") returns the uploaded file object.
+
+    FLASH MESSAGES:
+      flash("Something went wrong", "error") stores a message.
+      The HTML template shows it to the user.
+      Categories "error" and "success" let CSS style them differently.
+    """
+
+    # ── STEP 1: COLLECT all form fields ────────────────────────────────────
+    business_name = request.form.get("business_name", "").strip()
+    owner_name    = request.form.get("owner_name", "").strip()
+    category      = request.form.get("category", "").strip()
+    description   = request.form.get("description", "").strip()
+    whatsapp      = request.form.get("whatsapp", "").strip()
+    phone         = request.form.get("phone", "").strip()
+    location      = request.form.get("location", "").strip()
+
+    # Checkboxes: if checked, the value is "1"; if unchecked, it's missing
+    delivers = 1 if request.form.get("delivers") else 0
+
+    # ── STEP 2: VALIDATE — reject bad submissions ⭐ Security feature ───────
+
+    errors = []  # Collect all errors so we can show them all at once
+
+    # Required field validation
+    if not business_name:
+        errors.append("Business name is required.")
+    if not owner_name:
+        errors.append("Owner name is required.")
+    if not category:
+        errors.append("Please select a category.")
+    if not description:
+        errors.append("Description is required.")
+
+    # Description must be meaningful — prevents spam/placeholder listings
+    if description and len(description) < 20:
+        errors.append("Description must be at least 20 characters. Tell us about your business!")
+
+    # Valid categories — reject anything not in our list
+    valid_categories = ["Food", "Fashion", "Beauty", "Tech", "Tutoring", "Art", "Other"]
+    if category and category not in valid_categories:
+        errors.append("Please select a valid category.")
+
+    # If there are validation errors, stop here and tell the user
+    if errors:
+        for error in errors:
+            flash(error, "error")
+        return redirect(url_for("register_page"))
+
+    # ── STEP 3: HANDLE FILE UPLOAD (if a photo was provided) ⭐ Security ────
+
+    photo_filename = ""   # Default: no photo
+
+    photo_file = request.files.get("photo")
+
+    if photo_file and photo_file.filename:
+        # A file was uploaded — check if it's a valid image type
+        if not allowed_file(photo_file.filename):
+            flash("Only image files are allowed (PNG, JPG, GIF, WEBP).", "error")
+            return redirect(url_for("register_page"))
+
+        # secure_filename() sanitizes the filename to prevent path traversal attacks
+        # Example: "../../../etc/passwd" becomes "etc_passwd" (safe)
+        # ⭐ SECURITY: Never trust the user's original filename — always sanitize!
+        safe_name = secure_filename(photo_file.filename)
+
+        # Add a unique prefix to avoid overwriting files with the same name
+        # e.g. "photo.jpg" becomes "biz_3847261928_photo.jpg"
+        import time
+        unique_filename = f"biz_{int(time.time())}_{safe_name}"
+
+        # Build the full path where the file will be saved on the server
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_filename)
+
+        # Save the file to disk
+        photo_file.save(save_path)
+
+        # Store ONLY the filename in the database — not the full server path
+        # The HTML template will build the URL: /static/uploads/unique_filename
+        photo_filename = unique_filename
+
+    # ── STEP 4: SAVE to database ────────────────────────────────────────────
+
+    # Bundle all the validated data into a dictionary
+    business_data = {
+        "business_name":  business_name,
+        "owner_name":     owner_name,
+        "category":       category,
+        "description":    description,
+        "whatsapp":       whatsapp,
+        "phone":          phone,
+        "location":       location,
+        "delivers":       delivers,
+        "photo_filename": photo_filename
+        # Note: is_verified is NOT here — it defaults to 0 in the database schema
+        # This means ALL new listings start as PENDING until an admin approves them ⭐
+    }
+
+    # Insert into database and get the new business's ID
+    new_id = database.add_business(business_data)
+
+    # Success! Tell the user their listing is pending review
+    flash(
+        f"✅ '{business_name}' has been submitted! It will appear once approved by an admin.",
+        "success"
+    )
+
+    # Redirect to homepage (PRG pattern: Post-Redirect-Get prevents double submission)
+    return redirect(url_for("homepage"))
+
+
+# ─────────────────────────────────────────────────────────
+# ROUTE 5: GET + POST /admin  (Admin Approval Panel) ← BONUS
+# ─────────────────────────────────────────────────────────
+
+@app.route("/admin", methods=["GET", "POST"])
+def admin_panel():
+    """
+    Simple admin page for approving pending business listings.
+
+    GET  /admin        — shows all pending (unverified) listings
+    POST /admin        — approves a listing by setting is_verified = 1
+
+    ⭐ SHOW JUDGES THIS:
+       "New listings don't go live automatically. An admin must approve them.
+        This prevents spam and fake businesses from appearing on the platform."
+
+    HOW APPROVAL WORKS:
+      The admin page has a form with a hidden input: <input name="business_id" value="5">
+      When the admin clicks "Approve", the form POSTs to /admin with business_id=5
+      We call database.verify_business(5) which sets is_verified = 1 for that row
+      The business now appears on the homepage.
+
+    NOTE: In a real app, this page would be password protected.
+    For the hackathon, it's open — but mention to judges that authentication
+    would be added in a production version.
+    """
+    if request.method == "POST":
+        # Admin clicked "Approve" for a specific business
+        business_id = request.form.get("business_id")
+
+        if business_id and business_id.isdigit():
+            success = database.verify_business(int(business_id))
+            if success:
+                flash(f"✅ Business #{business_id} approved and now live.", "success")
+            else:
+                flash(f"❌ Business #{business_id} not found.", "error")
+        else:
+            flash("Invalid business ID.", "error")
+
+        return redirect(url_for("admin_panel"))
+
+    # GET request — show all pending listings
+    pending = database.get_pending_businesses()
+    return render_template("admin.html", pending=pending)
+
+
+# ─────────────────────────────────────────────────────────
+# RUN THE APP
+# ─────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    """
+    This block only runs when you execute:  python app.py
+    It does NOT run when a production server (like Gunicorn) imports this file.
+
+    debug=True means:
+      - The server auto-restarts when you save code changes
+      - Detailed error pages show in the browser when something crashes
+      - NEVER use debug=True in production (exposes internal code)
+    """
+    app.run(debug=True)
