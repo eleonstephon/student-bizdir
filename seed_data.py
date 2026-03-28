@@ -125,3 +125,6 @@ if __name__ == "__main__":
     seed_database()
     verify_data()
     print("\n✨ Done. Run the app to see the seeded businesses.")
+
+
+
