@@ -193,70 +193,80 @@ def register_page():
 
 @app.route("/register", methods=["POST"])
 def register_submit():
-    """
-    Receives and processes the registration form data.
-
-    This is the most important and complex route — it does 4 things:
-      1. COLLECT   — Read all form fields from the submitted form
-      2. VALIDATE  — Check that required fields are filled, etc. ⭐ Security
-      3. UPLOAD    — Save the photo file securely ⭐ Security
-      4. SAVE      — Insert the new business into the database
-
-    HOW request.form WORKS:
-      When a user submits an HTML form, the browser sends all the field values.
-      request.form is like a dictionary of those values.
-      request.form.get("business_name") returns what the user typed in that field.
-
-    HOW request.files WORKS:
-      File uploads come through request.files, not request.form.
-      request.files.get("photo") returns the uploaded file object.
-
-    FLASH MESSAGES:
-      flash("Something went wrong", "error") stores a message.
-      The HTML template shows it to the user.
-      Categories "error" and "success" let CSS style them differently.
-    """
-
-    # ── STEP 1: COLLECT all form fields ────────────────────────────────────
+    print("=" * 50)
+    print("🚀 FORM SUBMITTED! Checking data...")
+    
+    # Get form data
     business_name = request.form.get("business_name", "").strip()
-    owner_name    = request.form.get("owner_name", "").strip()
-    category      = request.form.get("category", "").strip()
-    description   = request.form.get("description", "").strip()
-    whatsapp      = request.form.get("whatsapp", "").strip()
-    phone         = request.form.get("phone", "").strip()
-    location      = request.form.get("location", "").strip()
-
-    # Checkboxes: if checked, the value is "1"; if unchecked, it's missing
+    owner_name = request.form.get("owner_name", "").strip()
+    category = request.form.get("category", "").strip()
+    description = request.form.get("description", "").strip()
+    whatsapp = request.form.get("whatsapp", "").strip()
+    phone = request.form.get("phone", "").strip()
+    location = request.form.get("location", "").strip()
     delivers = 1 if request.form.get("delivers") else 0
-
-    # ── STEP 2: VALIDATE — reject bad submissions ⭐ Security feature ───────
-
-    errors = []  # Collect all errors so we can show them all at once
-
-    # Required field validation
+    
+    print(f"Business name: '{business_name}'")
+    print(f"Owner name: '{owner_name}'")
+    print(f"Category: '{category}'")
+    print(f"Description length: {len(description)}")
+    
+    # Validation
+    errors = []
     if not business_name:
-        errors.append("Business name is required.")
+        errors.append("Business name is required")
+        print("❌ ERROR: Business name missing")
     if not owner_name:
-        errors.append("Owner name is required.")
+        errors.append("Owner name is required")
+        print("❌ ERROR: Owner name missing")
     if not category:
-        errors.append("Please select a category.")
-    if not description:
-        errors.append("Description is required.")
-
-    # Description must be meaningful — prevents spam/placeholder listings
-    if description and len(description) < 20:
-        errors.append("Description must be at least 20 characters. Tell us about your business!")
-
-    # Valid categories — reject anything not in our list
-    valid_categories = ["Food", "Fashion", "Beauty", "Tech", "Tutoring", "Art", "Other"]
-    if category and category not in valid_categories:
-        errors.append("Please select a valid category.")
-
-    # If there are validation errors, stop here and tell the user
+        errors.append("Category is required")
+        print("❌ ERROR: Category missing")
+    if len(description) < 20:
+        errors.append("Description must be at least 20 characters")
+        print(f"❌ ERROR: Description too short ({len(description)} chars)")
+    
+    print(f"Total errors: {len(errors)}")
+    
     if errors:
+        print("❌ Returning to form with errors")
         for error in errors:
             flash(error, "error")
         return redirect(url_for("register_page"))
+    
+    print("✅ All validation passed! Saving to database...")
+    
+    # Handle photo upload
+    photo_filename = ""
+    photo_file = request.files.get("photo")
+    if photo_file and photo_file.filename:
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(photo_file.filename)
+        photo_file.save(os.path.join("static/uploads", filename))
+        photo_filename = filename
+    
+    # Save to database
+    business_data = {
+        "business_name": business_name,
+        "owner_name": owner_name,
+        "category": category,
+        "description": description,
+        "whatsapp": whatsapp,
+        "phone": phone,
+        "location": location,
+        "delivers": delivers,
+        "photo_filename": photo_filename
+    }
+    
+    try:
+        new_id = database.add_business(business_data)
+        print(f"✅ Saved! New business ID: {new_id}")
+        flash(f"✅ '{business_name}' has been submitted!", "success")
+    except Exception as e:
+        print(f"❌ Error saving: {e}")
+        flash("There was an error saving your business.", "error")
+    
+    return redirect(url_for("homepage"))
 
     # ── STEP 3: HANDLE FILE UPLOAD (if a photo was provided) ⭐ Security ────
 
@@ -381,3 +391,4 @@ if __name__ == "__main__":
       - NEVER use debug=True in production (exposes internal code)
     """
     app.run(debug=True)
+    
