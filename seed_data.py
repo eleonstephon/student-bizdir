@@ -101,7 +101,7 @@ sample_businesses = [
      "0204567890", "0249876543", "ICT Centre, Room 12", 0, "techfix.jpg", 1),
     
     ("JS Tutorial Hub", "Yaw Asare", "Tech & Services",
-     "Coding lessons for beginners – Python, JavaScript, and web development. One-on-one tutoring available.",
+     "Coding lessons for beginners: Python, JavaScript, and web development. One-on-one tutoring available.",
      "0591122334", "0201234567", "Library Study Room 3", 0, "tutorial_hub.jpg", 1),
     
     ("PC Doctors", "Nii Armah", "Tech & Services",
