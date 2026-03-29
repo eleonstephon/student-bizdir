@@ -248,7 +248,7 @@ def register_submit():
         errors.append("Description must be at least 20 characters. Tell us about your business!")
 
     # Valid categories — reject anything not in our list
-    valid_categories = ["Food", "Fashion", "Beauty", "Tech", "Tutoring", "Art", "Other"]
+    valid_categories = ["Food & Drinks", "Beauty & Skincare", "Fashion & Clothing", "Tech & Services", "Lights & Decor", "Other"]
     if category and category not in valid_categories:
         errors.append("Please select a valid category.")
 
