@@ -2,7 +2,7 @@
 {% block title %}StuBiz - Homepage{% endblock title %}
 
 {% block main %}
-  <section class="border-bottom">
+<section class="border-bottom">
         <div class="container mt-3">
           <span class="d-flex justify-content-center">
             <small class="border border-2 rounded-pill p-1 mb-2"
@@ -19,7 +19,7 @@
           </div>
 
           <div>
-            <form class="my-3 d-flex" action="#" method="get">
+            <form class="my-3 d-flex" action="/" method="get">
               <input
                 class="form-control me-1"
                 type="search"
@@ -43,7 +43,7 @@
             <div class="col-8 col-sm-3">1200+ <br>Customers</div>
           </div>
         </div>
-      </section>
+</section>
 
       <section class="container text-nowrap mt-2">
         <div class="row mx-1">
@@ -101,7 +101,7 @@
               </div>
             </span>
           </div>
-        </di>
+        </div>
 
         <div class="mt-4 d-flex gap-4 justify-content-center flex-wrap">
             <button class="btn btn-info px-5 rounded-pill mb-2" data-bs-toggle="offcanvas" data-bs-target="#offcanvasTop" aria-controls="offcanvasTop" type="button">
@@ -140,7 +140,7 @@
                   <p class="card-text">
                     {{ biz.description }}
                   </p>
-                  <a href="business.html/{{ id }}" class="btn btn-primary">View Business</a>
+                  <a href="business/{{ biz.id }}" class="btn btn-primary">View Business</a>
                 </div>
               </div>
             </div>
@@ -148,7 +148,6 @@
           </div>
         </div>
       </section>
-  </section>
 {% endblock main %}
 
 {% block scripts %}
