@@ -112,24 +112,15 @@ def homepage():
     category_filter = request.args.get("category", "").strip()
 
     if search_query:
-        # User typed something in the search bar
-        # First try AI search (if it's set up), fall back to SQL LIKE search
-        try:
-            # ai_search is written by another team member — we wrap in try/except
-            # so if it fails, we gracefully fall back to basic search
-            from ai_search import ai_search
-            businesses = ai_search(search_query)
-        except Exception:
-            # AI search failed or not set up yet — use basic SQL LIKE search
-            businesses = database.search_businesses(search_query)
+    businesses = database.search_businesses(search_query)
 
     elif category_filter:
         # User clicked a category button (e.g. "Food", "Fashion", "Tech")
-        businesses = database.get_all_businesses(category=category_filter)
+    businesses = database.get_all_businesses(category=category_filter)
 
     else:
         # No search, no filter — show everything verified
-        businesses = database.get_all_businesses()
+    businesses = database.get_all_businesses()
 
     # render_template sends this data to templates/index.html
     # Member 1 uses {{ businesses }} in their HTML to display the listings
